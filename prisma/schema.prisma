@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id            String         @id @default(cuid())
+  shopifyDomain String         @unique
+  accessToken   String         @db.Text
+  isActive      Boolean        @default(true)
+  installedAt   DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  locations     StoreLocation[]
+
+  @@index([shopifyDomain])
+}
+
+model StoreLocation {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  name        String
+  imageUrl    String?
+  address     String
+  phone       String?
+  mapUrl      String?
+  latitude    String?
+  longitude   String?
+
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shopId, isActive, sortOrder])
+}
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  shopDomain  String
+  topic       String
+  payload     Json
+  processed   Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([shopDomain, topic, createdAt])
+}
