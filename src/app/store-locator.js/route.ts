@@ -2,15 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const shop = searchParams.get('shop') || '';
@@ -134,7 +125,7 @@ export async function GET(req: NextRequest) {
       render(locations);
     }).catch(function(err){
       var root=ensureContainer();
-      root.innerHTML = '<div class="sl-wrap"><h2 class="sl-title">Our Stores</h2><p>'+${JSON.stringify(escapeHtml('Failed to load store locations.'))}+'</p></div>';
+      root.innerHTML = '<div class="sl-wrap"><h2 class="sl-title">Our Stores</h2><p>Failed to load store locations.</p></div>';
     });
   }
 
