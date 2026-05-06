@@ -17,11 +17,25 @@ type Location = {
   sortOrder: number;
 };
 
+type SliderImage = {
+  id: string;
+  desktopImageUrl: string;
+  mobileImageUrl: string;
+  altText: string | null;
+  linkUrl: string | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+
 export default function AdminPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
+
+  const [sliderImages, setSliderImages] = useState<SliderImage[]>([]);
+  const [sliderLoading, setSliderLoading] = useState(false);
+  const [sliderError, setSliderError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     id: '',
@@ -37,6 +51,18 @@ export default function AdminPage() {
   });
 
   const isEditing = useMemo(() => Boolean(form.id), [form.id]);
+
+  const [sliderForm, setSliderForm] = useState({
+    id: '',
+    desktopImageUrl: '',
+    mobileImageUrl: '',
+    altText: '',
+    linkUrl: '',
+    isActive: true,
+    sortOrder: '0',
+  });
+
+  const isEditingSlider = useMemo(() => Boolean(sliderForm.id), [sliderForm.id]);
 
   async function getToken() {
     const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -91,8 +117,24 @@ export default function AdminPage() {
 
   useEffect(() => {
     load();
+    loadSlider();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadSlider() {
+    setSliderLoading(true);
+    setSliderError(null);
+    try {
+      const res = await authFetch('/api/admin/slider-images');
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { images: SliderImage[] };
+      setSliderImages(Array.isArray(data.images) ? data.images : []);
+    } catch (e) {
+      setSliderError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSliderLoading(false);
+    }
+  }
 
   function resetForm() {
     setForm({
@@ -169,6 +211,73 @@ export default function AdminPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function resetSliderForm() {
+    setSliderForm({
+      id: '',
+      desktopImageUrl: '',
+      mobileImageUrl: '',
+      altText: '',
+      linkUrl: '',
+      isActive: true,
+      sortOrder: '0',
+    });
+  }
+
+  async function onSliderSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSliderError(null);
+
+    const payload = {
+      id: sliderForm.id || undefined,
+      desktopImageUrl: sliderForm.desktopImageUrl.trim(),
+      mobileImageUrl: sliderForm.mobileImageUrl.trim(),
+      altText: sliderForm.altText.trim() ? sliderForm.altText.trim() : null,
+      linkUrl: sliderForm.linkUrl.trim() ? sliderForm.linkUrl.trim() : null,
+      isActive: Boolean(sliderForm.isActive),
+      sortOrder: Number(sliderForm.sortOrder || '0'),
+    };
+
+    try {
+      const res = await authFetch('/api/admin/slider-images', {
+        method: isEditingSlider ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await loadSlider();
+      resetSliderForm();
+    } catch (e) {
+      setSliderError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function onSliderEdit(img: SliderImage) {
+    setSliderForm({
+      id: img.id,
+      desktopImageUrl: img.desktopImageUrl || '',
+      mobileImageUrl: img.mobileImageUrl || '',
+      altText: img.altText || '',
+      linkUrl: img.linkUrl || '',
+      isActive: Boolean(img.isActive),
+      sortOrder: String(img.sortOrder ?? 0),
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function onSliderDelete(id: string) {
+    const ok = confirm('Delete this slider image?');
+    if (!ok) return;
+    try {
+      const res = await authFetch(`/api/admin/slider-images?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await loadSlider();
+    } catch (e) {
+      setSliderError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -277,6 +386,105 @@ export default function AdminPage() {
                 <tr>
                   <td colSpan={6} style={{ padding: 12, color: '#6b7280' }}>
                     No locations yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <hr style={{ margin: '24px 0', border: 0, borderTop: '1px solid #e5e7eb' }} />
+
+      <h2 style={{ margin: 0, fontSize: 18 }}>Slider Images</h2>
+      {sliderError ? <div style={{ marginTop: 12, color: '#b91c1c' }}>{sliderError}</div> : null}
+
+      <section style={{ marginTop: 16, border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>{isEditingSlider ? 'Edit Slider Image' : 'Add Slider Image'}</h3>
+        <form onSubmit={onSliderSubmit} style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Desktop Image URL" value={sliderForm.desktopImageUrl} onChange={(v) => setSliderForm((s) => ({ ...s, desktopImageUrl: v }))} />
+          <Field label="Mobile Image URL" value={sliderForm.mobileImageUrl} onChange={(v) => setSliderForm((s) => ({ ...s, mobileImageUrl: v }))} />
+          <Field label="Alt Text" value={sliderForm.altText} onChange={(v) => setSliderForm((s) => ({ ...s, altText: v }))} />
+          <Field label="Link URL" value={sliderForm.linkUrl} onChange={(v) => setSliderForm((s) => ({ ...s, linkUrl: v }))} />
+          <Field label="Sort Order" value={sliderForm.sortOrder} onChange={(v) => setSliderForm((s) => ({ ...s, sortOrder: v }))} />
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1' }}>
+            <input
+              type="checkbox"
+              checked={sliderForm.isActive}
+              onChange={(e) => setSliderForm((s) => ({ ...s, isActive: e.target.checked }))}
+            />
+            Active
+          </label>
+
+          <div style={{ display: 'flex', gap: 8, gridColumn: '1 / -1' }}>
+            <button type="submit" style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #111' }}>
+              {isEditingSlider ? 'Update' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={resetSliderForm}
+              style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={loadSlider}
+              style={{ marginLeft: 'auto', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}
+            >
+              {sliderLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section style={{ marginTop: 16 }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Slider Images</h3>
+        <div style={{ marginTop: 10, border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb', textAlign: 'left' }}>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }}>Preview</th>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }}>Alt</th>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }}>Link</th>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }}>Active</th>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }}>Sort</th>
+                <th style={{ padding: 10, borderBottom: '1px solid #e5e7eb' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {sliderImages.map((img) => (
+                <tr key={img.id}>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6' }}>
+                    <img src={img.desktopImageUrl} alt={img.altText || ''} style={{ width: 80, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                  </td>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6' }}>{img.altText || '-'}</td>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6' }}>{img.linkUrl || '-'}</td>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6' }}>{img.isActive ? 'Yes' : 'No'}</td>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6' }}>{img.sortOrder}</td>
+                  <td style={{ padding: 10, borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => onSliderEdit(img)}
+                      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSliderDelete(img.id)}
+                      style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {sliderImages.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: 12, color: '#6b7280' }}>
+                    No slider images yet.
                   </td>
                 </tr>
               ) : null}
