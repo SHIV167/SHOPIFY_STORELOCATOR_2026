@@ -39,6 +39,7 @@ export default function AdminPage() {
 
   const [uploadingDesktop, setUploadingDesktop] = useState(false);
   const [uploadingMobile, setUploadingMobile] = useState(false);
+  const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
 
   const [form, setForm] = useState({
     id: '',
@@ -284,6 +285,28 @@ export default function AdminPage() {
     }
   }
 
+  async function uploadLocationImage(file: File | null) {
+    if (!file) return;
+    setUploadingLocationImage(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('alt', form.name || file.name);
+      const res = await authFetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { url: string };
+      setForm((s) => ({ ...s, imageUrl: data.url }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploadingLocationImage(false);
+    }
+  }
+
   async function uploadFile(file: File | null, type: 'desktop' | 'mobile') {
     if (!file) return;
     const setter = type === 'desktop' ? setUploadingDesktop : setUploadingMobile;
@@ -332,7 +355,19 @@ export default function AdminPage() {
         <h2 style={{ margin: 0, fontSize: 16 }}>{isEditing ? 'Edit Location' : 'Add Location'}</h2>
         <form onSubmit={onSubmit} style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="Store Name" value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} />
-          <Field label="Image URL" value={form.imageUrl} onChange={(v) => setForm((s) => ({ ...s, imageUrl: v }))} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 13, color: '#111' }}>Store Image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => uploadLocationImage(e.target.files?.[0] ?? null)}
+              style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8 }}
+            />
+            {uploadingLocationImage ? <span style={{ fontSize: 12, color: '#6b7280' }}>Uploading…</span> : null}
+            {form.imageUrl ? (
+              <img src={form.imageUrl} alt="Store preview" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6, marginTop: 4 }} />
+            ) : null}
+          </div>
           <Field label="Address" value={form.address} onChange={(v) => setForm((s) => ({ ...s, address: v }))} />
           <Field label="Phone" value={form.phone} onChange={(v) => setForm((s) => ({ ...s, phone: v }))} />
           <Field label="Google Maps URL" value={form.mapUrl} onChange={(v) => setForm((s) => ({ ...s, mapUrl: v }))} />
