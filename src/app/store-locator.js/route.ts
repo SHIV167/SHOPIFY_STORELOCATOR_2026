@@ -81,16 +81,17 @@ export async function GET(req: NextRequest) {
       '@media (max-width:768px){.sl-card{width:calc(50% - .75rem);}}' +
       '@media (max-width:480px){.sl-card{width:100%;}.sl-actions{flex-direction:column;}}' +
 
-      /* Swiper overrides */ +
-      '.sl-swiper{width:100%;max-width:1200px;margin:0 auto 2rem auto;border-radius:12px;overflow:hidden;}' +
+      /* Swiper overrides — full-width edge-to-edge */ +
+      '.sl-swiper{width:100%;margin-bottom:2rem;overflow:hidden;}' +
       '.sl-swiper .swiper-slide a{display:block;}' +
       '.sl-swiper .swiper-slide picture,.sl-swiper .swiper-slide img{width:100%;height:auto;display:block;}' +
+      '.sl-swiper .swiper-pagination{bottom:16px!important;}' +
       '.sl-swiper .swiper-pagination-bullet{background:rgba(255,255,255,.6);opacity:1;width:10px;height:10px;}' +
       '.sl-swiper .swiper-pagination-bullet-active{background:#fff;}' +
-      '.sl-swiper .swiper-button-prev,.sl-swiper .swiper-button-next{color:#fff;background:rgba(0,0,0,.35);width:44px;height:44px;border-radius:50%;backdrop-filter:blur(4px);}' +
-      '.sl-swiper .swiper-button-prev:after,.sl-swiper .swiper-button-next:after{font-size:18px;font-weight:bold;}' +
+      '.sl-swiper .swiper-button-prev,.sl-swiper .swiper-button-next{color:#fff;background:rgba(0,0,0,.35);width:48px;height:48px;border-radius:50%;backdrop-filter:blur(4px);z-index:10;display:flex;align-items:center;justify-content:center;}' +
+      '.sl-swiper .swiper-button-prev svg,.sl-swiper .swiper-button-next svg{width:20px;height:20px;fill:currentColor;}' +
       '.sl-swiper .swiper-button-prev:hover,.sl-swiper .swiper-button-next:hover{background:rgba(0,0,0,.55);}' +
-      '@media (max-width:768px){.sl-swiper{border-radius:8px;}.sl-swiper .swiper-button-prev,.sl-swiper .swiper-button-next{width:36px;height:36px;}.sl-swiper .swiper-button-prev:after,.sl-swiper .swiper-button-next:after{font-size:14px;}}';
+      '@media (max-width:768px){.sl-swiper .swiper-button-prev,.sl-swiper .swiper-button-next{width:40px;height:40px;}}';
 
     var style = document.createElement('style');
     style.id='sl-store-locator-style';
@@ -119,10 +120,16 @@ export async function GET(req: NextRequest) {
       wrapper.appendChild(slide);
     });
 
+    var arrowSvg = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+    var arrowNextSvg = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
+
+    var prevBtn = el('div',{className:'swiper-button-prev',innerHTML:arrowSvg},[]);
+    var nextBtn = el('div',{className:'swiper-button-next',innerHTML:arrowNextSvg},[]);
+
     swiperEl.appendChild(wrapper);
     swiperEl.appendChild(el('div',{className:'swiper-pagination'},[]));
-    swiperEl.appendChild(el('div',{className:'swiper-button-prev'},[]));
-    swiperEl.appendChild(el('div',{className:'swiper-button-next'},[]));
+    swiperEl.appendChild(prevBtn);
+    swiperEl.appendChild(nextBtn);
 
     // Load Swiper from CDN then init
     loadScript('https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js').then(function(){
@@ -153,10 +160,10 @@ export async function GET(req: NextRequest) {
 
     var wrap=el('div',{className:'sl-wrap'},[]);
 
-    // Slider
+    // Slider — append directly to root for full viewport width
     if(sliderImages && sliderImages.length){
       var slider = createSlider(sliderImages);
-      if(slider) wrap.appendChild(slider);
+      if(slider) root.appendChild(slider);
     }
 
     wrap.appendChild(el('h2',{className:'sl-title'},['Our Stores']));
