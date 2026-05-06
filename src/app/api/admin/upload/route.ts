@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
 
     // Step 1: Generate staged upload target
     const stagedQuery = {
-      query: `mutation stagedUploadTargetGenerate($input: StagedUploadTargetGenerateInput!) {
-        stagedUploadTargetGenerate(input: $input) {
-          stagedUploadTarget {
+      query: `mutation stagedUploadsCreate($input: StagedUploadsCreateInput!) {
+        stagedUploadsCreate(input: $input) {
+          stagedUploadTargets {
             url
             resourceUrl
             parameters {
@@ -63,9 +63,13 @@ export async function POST(req: NextRequest) {
       }`,
       variables: {
         input: {
-          filename: file.name,
-          mimeType: file.type,
           resource: 'FILE',
+          stagedUploadTargets: [
+            {
+              filename: file.name,
+              mimeType: file.type,
+            },
+          ],
         },
       },
     };
@@ -86,19 +90,19 @@ export async function POST(req: NextRequest) {
 
     const stagedData = (await stagedRes.json()) as {
       data?: {
-        stagedUploadTargetGenerate?: {
-          stagedUploadTarget?: {
+        stagedUploadsCreate?: {
+          stagedUploadTargets?: Array<{
             url: string;
             resourceUrl: string;
             parameters: Array<{ name: string; value: string }>;
-          };
+          }>;
           userErrors?: Array<{ field: string; message: string }>;
         };
       };
       errors?: Array<{ message: string }>;
     };
 
-    const stagedUserErrors = stagedData.data?.stagedUploadTargetGenerate?.userErrors;
+    const stagedUserErrors = stagedData.data?.stagedUploadsCreate?.userErrors;
     if (stagedUserErrors && stagedUserErrors.length > 0) {
       return new NextResponse(stagedUserErrors.map((e) => e.message).join(', '), { status: 500 });
     }
@@ -108,10 +112,11 @@ export async function POST(req: NextRequest) {
       return new NextResponse(stagedErrors.map((e) => e.message).join(', '), { status: 500 });
     }
 
-    const target = stagedData.data?.stagedUploadTargetGenerate?.stagedUploadTarget;
-    if (!target) {
+    const targets = stagedData.data?.stagedUploadsCreate?.stagedUploadTargets;
+    if (!targets || targets.length === 0) {
       return new NextResponse('Failed to generate staged upload target', { status: 500 });
     }
+    const target = targets[0];
 
     // Step 2: Upload file binary to the signed URL
     const uploadForm = new FormData();
