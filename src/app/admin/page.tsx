@@ -292,6 +292,7 @@ export default function AdminPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('alt', sliderForm.altText || file.name);
       const res = await authFetch('/api/admin/upload', {
         method: 'POST',
         body: formData,
