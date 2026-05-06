@@ -37,6 +37,9 @@ export default function AdminPage() {
   const [sliderLoading, setSliderLoading] = useState(false);
   const [sliderError, setSliderError] = useState<string | null>(null);
 
+  const [uploadingDesktop, setUploadingDesktop] = useState(false);
+  const [uploadingMobile, setUploadingMobile] = useState(false);
+
   const [form, setForm] = useState({
     id: '',
     name: '',
@@ -281,6 +284,31 @@ export default function AdminPage() {
     }
   }
 
+  async function uploadFile(file: File | null, type: 'desktop' | 'mobile') {
+    if (!file) return;
+    const setter = type === 'desktop' ? setUploadingDesktop : setUploadingMobile;
+    setter(true);
+    setSliderError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await authFetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { url: string };
+      setSliderForm((s) => ({
+        ...s,
+        [type === 'desktop' ? 'desktopImageUrl' : 'mobileImageUrl']: data.url,
+      }));
+    } catch (e) {
+      setSliderError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setter(false);
+    }
+  }
+
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 1100 }}>
       <h1>Store Locator</h1>
@@ -402,8 +430,34 @@ export default function AdminPage() {
       <section style={{ marginTop: 16, border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
         <h3 style={{ margin: 0, fontSize: 16 }}>{isEditingSlider ? 'Edit Slider Image' : 'Add Slider Image'}</h3>
         <form onSubmit={onSliderSubmit} style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Desktop Image URL" value={sliderForm.desktopImageUrl} onChange={(v) => setSliderForm((s) => ({ ...s, desktopImageUrl: v }))} />
-          <Field label="Mobile Image URL" value={sliderForm.mobileImageUrl} onChange={(v) => setSliderForm((s) => ({ ...s, mobileImageUrl: v }))} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 13, color: '#111' }}>Desktop Image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => uploadFile(e.target.files?.[0] ?? null, 'desktop')}
+              style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8 }}
+            />
+            {uploadingDesktop ? <span style={{ fontSize: 12, color: '#6b7280' }}>Uploading…</span> : null}
+            {sliderForm.desktopImageUrl ? (
+              <img src={sliderForm.desktopImageUrl} alt="Desktop preview" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6, marginTop: 4 }} />
+            ) : null}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 13, color: '#111' }}>Mobile Image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => uploadFile(e.target.files?.[0] ?? null, 'mobile')}
+              style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8 }}
+            />
+            {uploadingMobile ? <span style={{ fontSize: 12, color: '#6b7280' }}>Uploading…</span> : null}
+            {sliderForm.mobileImageUrl ? (
+              <img src={sliderForm.mobileImageUrl} alt="Mobile preview" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6, marginTop: 4 }} />
+            ) : null}
+          </div>
+
           <Field label="Alt Text" value={sliderForm.altText} onChange={(v) => setSliderForm((s) => ({ ...s, altText: v }))} />
           <Field label="Link URL" value={sliderForm.linkUrl} onChange={(v) => setSliderForm((s) => ({ ...s, linkUrl: v }))} />
           <Field label="Sort Order" value={sliderForm.sortOrder} onChange={(v) => setSliderForm((s) => ({ ...s, sortOrder: v }))} />
