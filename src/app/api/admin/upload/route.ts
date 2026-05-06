@@ -39,14 +39,99 @@ export async function POST(req: NextRequest) {
       return new NextResponse('Shop not found or not authenticated', { status: 403 });
     }
 
-    // Convert file to base64 data URI
-    const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString('base64');
-    const dataUri = `data:${file.type};base64,${base64}`;
-
     const apiVersion = process.env.SHOPIFY_API_VERSION || '2024-10';
+    const baseUrl = `https://${shopDomain}/admin/api/${apiVersion}/graphql.json`;
+    const alt = (formData.get('alt') as string) || file.name;
 
-    const graphqlQuery = {
+    // Step 1: Generate staged upload target
+    const stagedQuery = {
+      query: `mutation stagedUploadTargetGenerate($input: StagedUploadTargetGenerateInput!) {
+        stagedUploadTargetGenerate(input: $input) {
+          stagedUploadTarget {
+            url
+            resourceUrl
+            parameters {
+              name
+              value
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`,
+      variables: {
+        input: {
+          filename: file.name,
+          mimeType: file.type,
+          resource: 'FILE',
+        },
+      },
+    };
+
+    const stagedRes = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': shop.accessToken,
+      },
+      body: JSON.stringify(stagedQuery),
+    });
+
+    if (!stagedRes.ok) {
+      const text = await stagedRes.text();
+      return new NextResponse(`Shopify staged upload failed: ${text}`, { status: 500 });
+    }
+
+    const stagedData = (await stagedRes.json()) as {
+      data?: {
+        stagedUploadTargetGenerate?: {
+          stagedUploadTarget?: {
+            url: string;
+            resourceUrl: string;
+            parameters: Array<{ name: string; value: string }>;
+          };
+          userErrors?: Array<{ field: string; message: string }>;
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+
+    const stagedUserErrors = stagedData.data?.stagedUploadTargetGenerate?.userErrors;
+    if (stagedUserErrors && stagedUserErrors.length > 0) {
+      return new NextResponse(stagedUserErrors.map((e) => e.message).join(', '), { status: 500 });
+    }
+
+    const stagedErrors = stagedData.errors;
+    if (stagedErrors && stagedErrors.length > 0) {
+      return new NextResponse(stagedErrors.map((e) => e.message).join(', '), { status: 500 });
+    }
+
+    const target = stagedData.data?.stagedUploadTargetGenerate?.stagedUploadTarget;
+    if (!target) {
+      return new NextResponse('Failed to generate staged upload target', { status: 500 });
+    }
+
+    // Step 2: Upload file binary to the signed URL
+    const uploadForm = new FormData();
+    for (const param of target.parameters) {
+      uploadForm.append(param.name, param.value);
+    }
+    uploadForm.append('file', file);
+
+    const uploadRes = await fetch(target.url, {
+      method: 'POST',
+      body: uploadForm,
+    });
+
+    if (!uploadRes.ok) {
+      const text = await uploadRes.text();
+      return new NextResponse(`File upload to Shopify storage failed: ${text}`, { status: 500 });
+    }
+
+    // Step 3: Create the file in Shopify using the staged resourceUrl
+    const fileCreateQuery = {
       query: `mutation fileCreate($files: [FileCreateInput!]!) {
         fileCreate(files: $files) {
           files {
@@ -70,26 +155,26 @@ export async function POST(req: NextRequest) {
       variables: {
         files: [
           {
-            alt: formData.get('alt') as string || file.name,
+            alt,
             contentType: 'IMAGE',
-            originalSource: dataUri,
+            originalSource: target.resourceUrl,
           },
         ],
       },
     };
 
-    const res = await fetch(`https://${shopDomain}/admin/api/${apiVersion}/graphql.json`, {
+    const res = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Shopify-Access-Token': shop.accessToken,
       },
-      body: JSON.stringify(graphqlQuery),
+      body: JSON.stringify(fileCreateQuery),
     });
 
     if (!res.ok) {
       const text = await res.text();
-      return new NextResponse(`Shopify upload failed: ${text}`, { status: 500 });
+      return new NextResponse(`Shopify fileCreate failed: ${text}`, { status: 500 });
     }
 
     const data = (await res.json()) as {
