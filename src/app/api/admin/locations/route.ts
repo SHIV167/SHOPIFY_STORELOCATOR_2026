@@ -4,18 +4,37 @@ import { getShopDomainFromSessionToken } from '@/lib/shopify-session-token';
 
 export const dynamic = 'force-dynamic';
 
-async function getShopFromAuth(req: NextRequest) {
-  return getShopDomainFromSessionToken(req);
+async function getShopFromAuth(req: NextRequest): Promise<string | null> {
+  // Try session token first, then fall back to shop query parameter (no auth restriction)
+  let shopDomain = await getShopDomainFromSessionToken(req);
+  if (!shopDomain) {
+    shopDomain = req.nextUrl.searchParams.get('shop');
+  }
+  return shopDomain;
+}
+
+async function getOrCreateShop(shopDomain: string) {
+  let shop = await prisma.shop.findUnique({
+    where: { shopifyDomain: shopDomain },
+  });
+  if (!shop) {
+    // Auto-create shop if not exists (no auth restriction)
+    shop = await prisma.shop.create({
+      data: {
+        shopifyDomain: shopDomain,
+        accessToken: '', // No OAuth required
+        isActive: true,
+      },
+    });
+  }
+  return shop;
 }
 
 export async function GET(req: NextRequest) {
   const shopDomain = await getShopFromAuth(req);
-  if (!shopDomain) return new NextResponse('Unauthorized', { status: 401 });
+  if (!shopDomain) return new NextResponse('Missing shop parameter', { status: 400 });
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopifyDomain: shopDomain },
-  });
-  if (!shop) return new NextResponse('Not found', { status: 404 });
+  const shop = await getOrCreateShop(shopDomain);
 
   const locations = await prisma.storeLocation.findMany({
     where: { shopId: shop.id },
@@ -27,12 +46,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const shopDomain = await getShopFromAuth(req);
-  if (!shopDomain) return new NextResponse('Unauthorized', { status: 401 });
+  if (!shopDomain) return new NextResponse('Missing shop parameter', { status: 400 });
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopifyDomain: shopDomain },
-  });
-  if (!shop) return new NextResponse('Not found', { status: 404 });
+  const shop = await getOrCreateShop(shopDomain);
 
   const body = (await req.json()) as Partial<{
     name: string;
@@ -70,12 +86,9 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const shopDomain = await getShopFromAuth(req);
-  if (!shopDomain) return new NextResponse('Unauthorized', { status: 401 });
+  if (!shopDomain) return new NextResponse('Missing shop parameter', { status: 400 });
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopifyDomain: shopDomain },
-  });
-  if (!shop) return new NextResponse('Not found', { status: 404 });
+  const shop = await getOrCreateShop(shopDomain);
 
   const body = (await req.json()) as Partial<{
     id: string;
@@ -117,12 +130,9 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const shopDomain = await getShopFromAuth(req);
-  if (!shopDomain) return new NextResponse('Unauthorized', { status: 401 });
+  if (!shopDomain) return new NextResponse('Missing shop parameter', { status: 400 });
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopifyDomain: shopDomain },
-  });
-  if (!shop) return new NextResponse('Not found', { status: 404 });
+  const shop = await getOrCreateShop(shopDomain);
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
